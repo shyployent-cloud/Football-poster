@@ -29,9 +29,19 @@ def html_to_image():
 
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            page = browser.new_page(viewport={'width': 600, 'height': 900})
+            page = browser.new_page(
+                viewport={'width': 640, 'height': 900},
+                device_scale_factor=2
+            )
             page.set_content(html_content, wait_until='networkidle')
-            page.screenshot(path=output_path, full_page=True)
+            page.wait_for_timeout(1000)
+            height = page.evaluate("document.body.scrollHeight")
+            page.set_viewport_size({'width': 640, 'height': height})
+            page.screenshot(
+                path=output_path,
+                full_page=False,
+                clip={'x': 0, 'y': 0, 'width': 640, 'height': height}
+            )
             browser.close()
 
         image_store[image_id] = output_path
