@@ -21,8 +21,16 @@ def serve_image(image_id):
 @app.route('/html-to-image', methods=['POST'])
 def html_to_image():
     try:
-        data = request.json
-        html_content = data.get('html', '')
+        data = request.get_json(force=True, silent=True)
+        if data is None:
+            html_content = request.data.decode('utf-8')
+        elif isinstance(data, str):
+            html_content = data
+        else:
+            html_content = data.get('html', '')
+
+        if not html_content:
+            return jsonify({'error': 'No HTML content received'}), 400
 
         image_id = str(uuid.uuid4())
         output_path = f'/tmp/{image_id}.png'
