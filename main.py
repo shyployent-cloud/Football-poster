@@ -3,6 +3,7 @@ from playwright.sync_api import sync_playwright
 import os
 import base64
 import uuid
+import requests as req
 
 app = Flask(__name__)
 
@@ -61,6 +62,68 @@ def html_to_image():
         return jsonify({
             'image_url': image_url,
             'image_base64': encoded
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/momentum', methods=['POST'])
+def get_momentum():
+    try:
+        data = request.json
+        home_team = data.get('home_team', '')
+        away_team = data.get('away_team', '')
+        match_date = data.get('date', '')
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        url = f'https://www.sofascore.com/api/v1/sport/football/scheduled-events/{match_date}'
+        response = req.get(url, headers=headers)
+        events = response.json().get('events', [])
+
+        match_id = None
+        for event in events:
+            home = event.get('homeTeam', {}).get('name', '').lower()
+            away = event.get('awayTeam', {}).get('name', '').lower()
+            if home_team.lower() in home or home in home_team.lower():
+                if away_team.lower() in away or away in away_team.lower():
+                    match_id = event.get('id')
+                    break
+
+        if not match_id:
+            return jsonify({'error': 'Match not found on SofaScore'}), 404
+
+        widget_url = f'https://widgets.sofascore.com/embed/attackMomentum?id={match_id}&widgetTheme=dark'
+
+        image_id = str(uuid.uuid4())
+        output_path = f'/tmp/{image_id}.png'
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(
+                viewport={'width': 700, 'height': 300},
+                device_scale_factor=3
+            )
+            page.goto(widget_url, wait_until='networkidle')
+            page.wait_for_timeout(3000)
+            page.screenshot(
+                path=output_path,
+                full_page=False,
+                clip={'x': 0, 'y': 0, 'width': 700, 'height': 286}
+            )
+            browser.close()
+
+        image_store[image_id] = output_path
+        image_url = f'https://football-poster-production.up.railway.app/image/{image_id}'
+
+        with open(output_path, 'rb') as f:
+            encoded = base64.b64encode(f.read()).decode()
+
+        return jsonify({
+            'image_url': image_url,
+            'image_base64': encoded,
+            'match_id': match_id
         })
 
     except Exception as e:
