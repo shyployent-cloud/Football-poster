@@ -1,5 +1,2 @@
 flask
-pillow
-requests
-matplotlib
-numpy
+playwright
