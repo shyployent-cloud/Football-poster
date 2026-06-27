@@ -5,6 +5,13 @@ from io import BytesIO
 import os
 import base64
 
+import subprocess
+import sys
+
+# Install playwright browser on startup
+subprocess.run([sys.executable, '-m', 'playwright', 'install', 'chromium'], check=False)
+subprocess.run([sys.executable, '-m', 'playwright', 'install-deps', 'chromium'], check=False)
+
 app = Flask(__name__)
 
 @app.route('/')
