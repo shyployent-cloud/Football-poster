@@ -31,21 +31,20 @@ def html_to_image():
             browser = p.chromium.launch()
             page = browser.new_page(
                 viewport={'width': 640, 'height': 900},
-                device_scale_factor=2
+                device_scale_factor=3
             )
             page.set_content(html_content, wait_until='networkidle')
             page.wait_for_timeout(1000)
-            height = page.evaluate("document.body.scrollHeight")
-            page.set_viewport_size({'width': 640, 'height': height})
+            height = page.evaluate("document.querySelector('.card').getBoundingClientRect().height + 40")
+            page.set_viewport_size({'width': 640, 'height': int(height)})
             page.screenshot(
                 path=output_path,
                 full_page=False,
-                clip={'x': 0, 'y': 0, 'width': 640, 'height': height}
+                clip={'x': 0, 'y': 0, 'width': 640, 'height': int(height)}
             )
             browser.close()
 
         image_store[image_id] = output_path
-
         image_url = f'https://football-poster-production.up.railway.app/image/{image_id}'
 
         with open(output_path, 'rb') as f:
