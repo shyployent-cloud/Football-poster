@@ -71,47 +71,25 @@ def html_to_image():
 def get_momentum():
     try:
         data = request.json
-        home_team = data.get('home_team', '')
-        away_team = data.get('away_team', '')
-        match_date = data.get('date', '')
+        widget_url = data.get('widget_url', '').strip()
+
+        if not widget_url:
+            return jsonify({'error': 'No widget URL provided'}), 400
+
+        widget_url = widget_url.replace('widgetTheme=light', 'widgetTheme=dark')
+
+        image_id = str(uuid.uuid4())
+        output_path = f'/tmp/{image_id}.png'
 
         with sync_playwright() as p:
             browser = p.chromium.launch()
-
-            # Fetch SofaScore events via Playwright browser
-            page = browser.new_page()
-            api_url = f'https://www.sofascore.com/api/v1/sport/football/scheduled-events/{match_date}'
-            page.goto(api_url, wait_until='networkidle')
-            content = page.evaluate('() => document.body.innerText')
-            events_data = json.loads(content)
-            events = events_data.get('events', [])
-
-            # Find matching game by team names
-            match_id = None
-            for event in events:
-                home = event.get('homeTeam', {}).get('name', '').lower()
-                away = event.get('awayTeam', {}).get('name', '').lower()
-                if home_team.lower() in home or home in home_team.lower():
-                    if away_team.lower() in away or away in away_team.lower():
-                        match_id = event.get('id')
-                        break
-
-            if not match_id:
-                browser.close()
-                return jsonify({'error': 'Match not found on SofaScore'}), 404
-
-            # Screenshot momentum widget
-            widget_url = f'https://widgets.sofascore.com/embed/attackMomentum?id={match_id}&widgetTheme=dark'
-            widget_page = browser.new_page(
-                viewport={'width': 700, 'height': 300}
+            page = browser.new_page(
+                viewport={'width': 700, 'height': 300},
+                device_scale_factor=3
             )
-            widget_page.goto(widget_url, wait_until='networkidle')
-            widget_page.wait_for_timeout(3000)
-
-            image_id = str(uuid.uuid4())
-            output_path = f'/tmp/{image_id}.png'
-
-            widget_page.screenshot(
+            page.goto(widget_url, wait_until='networkidle')
+            page.wait_for_timeout(3000)
+            page.screenshot(
                 path=output_path,
                 full_page=False,
                 clip={'x': 0, 'y': 0, 'width': 700, 'height': 286}
@@ -125,13 +103,3 @@ def get_momentum():
             encoded = base64.b64encode(f.read()).decode()
 
         return jsonify({
-            'image_url': image_url,
-            'image_base64': encoded,
-            'match_id': match_id
-        })
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
