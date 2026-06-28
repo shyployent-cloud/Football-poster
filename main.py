@@ -3,7 +3,7 @@ from playwright.sync_api import sync_playwright
 import os
 import base64
 import uuid
-import requests as req
+import json
 
 app = Flask(__name__)
 
@@ -75,39 +75,43 @@ def get_momentum():
         away_team = data.get('away_team', '')
         match_date = data.get('date', '')
 
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        url = f'https://www.sofascore.com/api/v1/sport/football/scheduled-events/{match_date}'
-        response = req.get(url, headers=headers)
-        events = response.json().get('events', [])
-
-        match_id = None
-        for event in events:
-            home = event.get('homeTeam', {}).get('name', '').lower()
-            away = event.get('awayTeam', {}).get('name', '').lower()
-            if home_team.lower() in home or home in home_team.lower():
-                if away_team.lower() in away or away in away_team.lower():
-                    match_id = event.get('id')
-                    break
-
-        if not match_id:
-            return jsonify({'error': 'Match not found on SofaScore'}), 404
-
-        widget_url = f'https://widgets.sofascore.com/embed/attackMomentum?id={match_id}&widgetTheme=dark'
-
-        image_id = str(uuid.uuid4())
-        output_path = f'/tmp/{image_id}.png'
-
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            page = browser.new_page(
-                viewport={'width': 700, 'height': 300},
-                device_scale_factor=3
+
+            # Fetch SofaScore events via Playwright browser
+            page = browser.new_page()
+            api_url = f'https://www.sofascore.com/api/v1/sport/football/scheduled-events/{match_date}'
+            page.goto(api_url, wait_until='networkidle')
+            content = page.evaluate('() => document.body.innerText')
+            events_data = json.loads(content)
+            events = events_data.get('events', [])
+
+            # Find matching game by team names
+            match_id = None
+            for event in events:
+                home = event.get('homeTeam', {}).get('name', '').lower()
+                away = event.get('awayTeam', {}).get('name', '').lower()
+                if home_team.lower() in home or home in home_team.lower():
+                    if away_team.lower() in away or away in away_team.lower():
+                        match_id = event.get('id')
+                        break
+
+            if not match_id:
+                browser.close()
+                return jsonify({'error': 'Match not found on SofaScore'}), 404
+
+            # Screenshot momentum widget
+            widget_url = f'https://widgets.sofascore.com/embed/attackMomentum?id={match_id}&widgetTheme=dark'
+            widget_page = browser.new_page(
+                viewport={'width': 700, 'height': 300}
             )
-            page.goto(widget_url, wait_until='networkidle')
-            page.wait_for_timeout(3000)
-            page.screenshot(
+            widget_page.goto(widget_url, wait_until='networkidle')
+            widget_page.wait_for_timeout(3000)
+
+            image_id = str(uuid.uuid4())
+            output_path = f'/tmp/{image_id}.png'
+
+            widget_page.screenshot(
                 path=output_path,
                 full_page=False,
                 clip={'x': 0, 'y': 0, 'width': 700, 'height': 286}
